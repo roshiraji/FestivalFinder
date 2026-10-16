@@ -16,13 +16,31 @@ Search a curated collection of official festival FAQ and guide pages for queries
 - Weather preparation, packing, and clothing
 - Experiences and recommendations from previous attendees
 
-**Initial festivals:** Coachella, Bonnaroo, Lollapalooza, EDC Las Vegas, Outside Lands
+**Festivals:** Coachella, Bonnaroo, Lollapalooza, EDC Las Vegas, Outside Lands
 
-Documents come from official festival websites and FAQ guides. Reddit discussions may be added later. The system must **not** fabricate festival information.
+Documents come from official festival websites and FAQ guides. The system does not fabricate festival information.
 
 ---
 
-## Architecture (planned pipeline)
+## Current progress
+
+Collection, preprocessing, TF-IDF, BM25, and the evaluation worksheet are implemented. Manual relevance labels are still blank, so Precision@5, Precision@10, and MAP have not been scored. The Streamlit interface is not built yet.
+
+| Piece | State |
+|-------|--------|
+| Official-page collection | 257 documents from five festivals |
+| Working collection | 246 documents indexed; 11 Bonnaroo near-duplicate passes are recorded in the manifest and left out of the index |
+| Baseline TF-IDF | Body text only. Original rankings stay reproducible |
+| Improved TF-IDF | Porter stemming, title weight 2, and festival filtering |
+| BM25 | Same tokens, title weight, and festival filter as the improved TF-IDF ranker |
+| Search | Interactive command line with `--mode baseline`, `--mode improved`, and `--mode bm25` |
+| Evaluation setup | 12 queries and a 166-row judgment pool with a blank `relevance` column |
+| Metrics code | Precision@5, Precision@10, and condensed-list MAP. Scores print only after every label is filled |
+| Streamlit | Not started |
+
+---
+
+## Architecture
 
 ```text
 Official festival pages
@@ -31,26 +49,32 @@ Official festival pages
   collect.py  ──►  data/raw + data/processed/documents.csv
         │
         ▼
- preprocess.py  ──►  cleaned / tokenized text
+ preprocess.py  ──►  cleaned / tokenized text (original CSV is not rewritten)
         │
-        ▼
-   index.py  ──►  TF-IDF matrix + term→document lookup
-        │
-        ▼
-  search.py  ──►  TF-IDF cosine similarity  |  BM25
-        │
-        ├──►  app.py (Streamlit UI)
-        └──►  evaluate.py  ──►  Precision@5 (queries + judgments)
+        ├──►  index.py   ──►  baseline TF-IDF  |  improved TF-IDF
+        └──►  bm25.py    ──►  BM25Okapi
+                    │
+                    ▼
+              search.py  ──►  top results with title, festival, score, snippet, URL
+                    │
+                    ▼
+             evaluate.py ──►  judgment pool, then Precision@5, Precision@10, and MAP
+                    │
+                    ▼
+               app.py    ──►  Streamlit UI (not built yet)
 ```
 
 | Component | Role |
 |-----------|------|
 | `src/collect.py` | Fetch and parse permitted official pages; write CSV documents |
-| `src/preprocess.py` | Clean HTML artifacts, normalize, tokenize, optional stopword removal |
-| `src/index.py` | Build TF-IDF document representations and inverted-index-style lookup |
-| `src/search.py` | Query processing; TF-IDF cosine and BM25 ranking; top-k results with URLs |
-| `src/evaluate.py` | ≥5 test queries, relevance judgments, Precision@5 (optional TF-IDF vs BM25) |
-| `app.py` | Streamlit search UI (titles, snippets, source links, optional method toggle) |
+| `src/preprocess.py` | Validate the CSV, clean copies of the text, tokenize, remove stopwords, and stem for the improved rankers |
+| `src/index.py` | Build the baseline and improved TF-IDF matrixes and the term-to-document lookup |
+| `src/bm25.py` | Build the BM25 index with `rank-bm25` |
+| `src/search.py` | Interactive search and the five-query demo for all three rankers |
+| `src/evaluate.py` | Build the blank judgment pool; score Precision@5, Precision@10, and MAP after the labels are complete |
+| `app.py` | Streamlit search UI, still a stub |
+
+The original `documents.csv` is read-only for indexing and search. Display text in search results comes from that file.
 
 ---
 
@@ -59,16 +83,19 @@ Official festival pages
 ```text
 FestivalFinder/
 ├── data/
-│   ├── raw/                 # seed_urls.csv; local HTML dumps stay untracked
+│   ├── raw/                         # seed_urls.csv; local HTML dumps stay untracked
 │   ├── processed/
-│   │   └── documents.csv    # document collection (schema only for now)
+│   │   ├── documents.csv            # 257 collected documents
+│   │   └── indexing_manifest.csv    # which of those 257 are indexed
 │   └── evaluation/
-│       ├── queries.csv
-│       └── relevance_judgments.csv
+│       ├── queries.csv              # 12 evaluation queries
+│       ├── judgment_pool.csv        # 166 rows awaiting 0/1 labels
+│       └── relevance_judgments.csv  # unused header-only placeholder
 ├── src/
 │   ├── collect.py
 │   ├── preprocess.py
 │   ├── index.py
+│   ├── bm25.py
 │   ├── search.py
 │   └── evaluate.py
 ├── tests/
@@ -80,90 +107,37 @@ FestivalFinder/
 
 ---
 
-## Dataset schema
+## Dataset
 
 ### Documents — `data/processed/documents.csv`
 
 | Field | Description |
 |-------|-------------|
 | `document_id` | Unique document identifier |
-| `festival_name` | e.g. Coachella, Bonnaroo |
-| `festival_year` | Year the guide/page applies to |
-| `category` | e.g. transportation, lodging, rules, weather, experiences |
+| `festival_name` | Coachella, Bonnaroo, Lollapalooza, EDC Las Vegas, or Outside Lands |
+| `festival_year` | Year the guide or page applies to |
+| `category` | transportation, lodging, rules, weather, or experiences |
 | `title` | Document or section title |
 | `content` | Main searchable text |
-| `source_type` | e.g. official_faq, official_guide |
+| `source_type` | official_faq or official_guide |
 | `source_url` | Canonical URL |
 | `published_date` | Publication or last-updated date when available |
 
-`queries.csv` lists 12 evaluation questions. `judgment_pool.csv` is created by `python -m src.evaluate --make-pool` and starts with a blank relevance column. `documents.csv` is filled locally by `src/collect.py` with wording copied from official pages. Keep that file local unless a festival site permits redistribution. No fictional festival rows are generated.
+The file holds wording copied from official pages. Keep it local unless a festival site permits redistribution.
+
+Indexing uses 246 of these rows. Eleven Bonnaroo lodging passes were near-duplicates of a longer kept copy. They remain in `documents.csv`. `indexing_manifest.csv` records the held-out title and the title that was kept.
 
 ### Evaluation — `data/evaluation/`
 
-- **`queries.csv`:** `query_id`, `query_text`, `description` (transportation, lodging, rules, packing, or experiences)
-- **`judgment_pool.csv`:** `query_id`, `query_text`, `document_id`, `festival_name`, `title`, `category`, `source_url`, `relevance` (blank until labeled `0` or `1`)
-- **`relevance_judgments.csv`:** earlier header-only placeholder; the worksheet to fill is `judgment_pool.csv`
-
-Target: at least five evaluation queries with manual judgments and **Precision@5**.
+- **`queries.csv`:** `query_id`, `query_text`, `description` (transportation, lodging, rules, packing, or experiences). Includes the five original demo queries plus seven more.
+- **`judgment_pool.csv`:** `query_id`, `query_text`, `document_id`, `festival_name`, `title`, `category`, `source_url`, `relevance`. One row per query and document in the union of each ranker's top 10. `relevance` is blank until labeled `1` (answers the question) or `0` (does not).
+- **`relevance_judgments.csv`:** earlier header-only placeholder. The worksheet to fill is `judgment_pool.csv`.
 
 ---
 
-## Technology stack
+## How to run it
 
-| Library | Use |
-|---------|-----|
-| Python 3.11+ | Runtime |
-| pandas | CSV / tabular data |
-| requests + BeautifulSoup | Permitted page collection |
-| NLTK | Tokenization / stopwords |
-| scikit-learn | TF-IDF and cosine similarity |
-| rank-bm25 | BM25 ranking |
-| Streamlit | Local search UI |
-| pytest | Tests (later) |
-
-Install (when you begin coding against the stubs):
-
-```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
----
-
-## Course concepts demonstrated
-
-1. Document collection and preprocessing  
-2. Tokenization and text normalization  
-3. Document representation and indexing  
-4. Query processing  
-5. TF-IDF and cosine similarity  
-6. BM25 document ranking  
-7. Relevance judgments  
-8. Precision@5 evaluation  
-
-Optional later: WordNet query expansion, document classification, sentiment analysis.
-
----
-
-## Development milestones
-
-| Milestone | Status | Goal |
-|-----------|--------|------|
-| **0. Repository setup** | Complete | Folders, schemas, stubs, README, dependencies |
-| **1. Collection pipeline** | Complete | 257 documents from five official festival guides |
-| **2. Preprocessing and TF-IDF** | Complete | Baseline TF-IDF plus a title-aware, festival-filtered ranker |
-| **3. Indexing** | Complete for TF-IDF and BM25 | Same 246-document working collection |
-| **4. Search / ranking** | **In review** | Interactive baseline TF-IDF, improved TF-IDF, and BM25 |
-| **5. Evaluation** | **In review** | 12 queries and a blank judgment pool. Metrics wait for labels |
-| **6. Streamlit UI** | Planned | Local query interface |
-| **7. Presentation** | Planned | 15-minute demo of architecture, code, search, evaluation |
-
-**Current step:** Milestone 3 BM25 and the evaluation worksheet are ready for review. Relevance labels are still blank, so Precision@5, Precision@10, and MAP are not reported. Streamlit is not implemented.
-
-### Search from PowerShell
-
-Run these commands from the FestivalFinder project folder.
+From the FestivalFinder project folder in PowerShell:
 
 ```powershell
 python -m src.search
@@ -175,24 +149,89 @@ python -m src.search --mode baseline --demo
 python -m src.search --mode bm25 --demo
 python -m src.search --mode bm25 --no-festival-filter
 python -m src.evaluate --make-pool
+python -m src.evaluate
 ```
 
-`python -m src.search` opens the interactive improved TF-IDF ranker. Type a question, read the top five results, and type `exit` to quit. `--mode baseline` is the original body-only TF-IDF index. `--mode bm25` is BM25 with the same stemming, title weight, and festival filter as the improved TF-IDF ranker. `--demo` runs the five original sample queries in the selected mode and exits. `--no-festival-filter` searches every festival even when the question names one.
+`python -m src.search` opens the interactive improved TF-IDF ranker. Type a question, read the top five results, and type `exit` to quit.
 
-`python -m src.evaluate --make-pool` writes `data/evaluation/judgment_pool.csv`. Each row is one query and one document from the union of the three rankers' top 10 lists. The `relevance` column is blank. Enter `1` when the document answers the question and `0` when it does not. The command will not replace the file after any label has been entered. `python -m src.evaluate` reports Precision@5, Precision@10, and MAP only after every cell is filled.
+| Command | What it runs |
+|---------|----------------|
+| `--mode baseline` | Original body-only TF-IDF. No stemming and no festival filter |
+| `--mode improved` | Stemmed, title-weighted TF-IDF. A named festival limits the results |
+| `--mode bm25` | BM25 with the same text handling and festival filter as improved TF-IDF |
+| `--demo` | The five original sample queries, then exit |
+| `--no-festival-filter` | Search every festival even when the question names one |
+| `--title-weight` | How many times each non-festival title term is counted. Default: 2 |
+| `--k1`, `--b` | BM25 term-frequency saturation and length penalty. Defaults: 1.5 and 0.75 |
+
+`python -m src.evaluate --make-pool` rewrites `judgment_pool.csv` only while every `relevance` cell is still blank. After any label is entered, that command refuses to overwrite the file. `python -m src.evaluate` reports per-query and average Precision@5, Precision@10, and MAP only after every cell is `0` or `1`.
 
 ### What the metrics mean
 
-Precision@5 is the fraction of the first five results that you marked relevant. Precision@10 uses the first ten. The denominator stays 5 or 10 when the ranker returns fewer documents. Mean average precision walks down the judged list and averages precision at each relevant document, then averages that value across queries. Documents that never entered the judgment pool are left out of MAP. They are not marked irrelevant.
+Precision@5 is the fraction of the first five results marked relevant. Precision@10 uses the first ten. The denominator stays 5 or 10 when the ranker returns fewer documents, because those missing positions are not retrieved documents. A retrieved document with a blank label is different: that metric is skipped rather than treating the blank as irrelevant.
+
+Mean average precision averages, for each query, the precision at each relevant document's rank, then averages those query scores. Documents that never entered the judgment pool are left out of that ranked list. They are not marked irrelevant. This is condensed-list MAP, and it can be higher than a MAP that counted unjudged documents as not relevant.
+
+---
+
+## Technology stack
+
+| Library | Use |
+|---------|-----|
+| Python 3.11+ | Runtime |
+| pandas | CSV / tabular data |
+| requests + BeautifulSoup | Permitted page collection |
+| NLTK | Stopwords and the Porter stemmer |
+| scikit-learn | TF-IDF and cosine similarity |
+| rank-bm25 | BM25 ranking |
+| Streamlit | Local search UI (not built yet) |
+| pytest | Tests for collection, preprocessing, TF-IDF, BM25, and evaluation math |
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python -m pytest
+```
+
+---
+
+## Course concepts demonstrated
+
+1. Document collection and preprocessing
+2. Tokenization, stopword removal, and Porter stemming
+3. TF-IDF document-term matrix and an inverted-index view of its columns
+4. Query processing shared with the document text
+5. Cosine similarity
+6. BM25 document ranking
+7. Pooled relevance judgments (labels still to be entered)
+8. Precision@5, Precision@10, and MAP (implemented; not yet scored)
+
+Possible later work: WordNet query expansion for wording mismatches such as "bring" versus "allowed" and "prohibited." Document classification and sentiment analysis are not part of the current system.
+
+---
+
+## Development milestones
+
+| Milestone | Status | Goal |
+|-----------|--------|------|
+| **0. Repository setup** | Complete | Folders, schemas, stubs, README, dependencies |
+| **1. Collection pipeline** | Complete | 257 documents from five official festival guides |
+| **2. TF-IDF** | Complete | Baseline body-only TF-IDF, then title weighting, stemming, and festival filtering |
+| **3. BM25 and evaluation setup** | Complete through the blank judgment pool | BM25 search mode, 12 queries, 166-row pool, metric functions |
+| **4. Manual judgments and scored evaluation** | Next | Fill `relevance`, then report Precision@5, Precision@10, and MAP |
+| **5. Streamlit UI** | Planned | Local query interface |
+| **6. Presentation** | Planned | 15-minute demo of architecture, code, search, and evaluation |
 
 ---
 
 ## Deliverables checklist (course)
 
-- [ ] Functioning retrieval system  
-- [ ] ≥5 evaluation queries with relevance judgments  
-- [ ] ≥1 standard metric (Precision@5)  
-- [ ] 15-minute recorded presentation  
+- [x] Functioning retrieval system (command line; three rankers)
+- [x] At least five evaluation queries
+- [ ] Manual relevance judgments
+- [ ] Reported Precision@5 (code is ready; labels are not)
+- [ ] 15-minute recorded presentation
 
 ---
 

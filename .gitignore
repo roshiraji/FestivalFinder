@@ -245,6 +245,7 @@ data/processed/bm25_*.npz
 data/raw/*
 !data/raw/.gitkeep
 !data/raw/README.md
+!data/raw/seed_urls.csv
 
 # OS / editor junk
 .DS_Store

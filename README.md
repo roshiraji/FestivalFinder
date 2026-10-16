@@ -59,7 +59,7 @@ Official festival pages
 ```text
 FestivalFinder/
 ├── data/
-│   ├── raw/                 # scraped HTML or intermediate dumps
+│   ├── raw/                 # seed_urls.csv; local HTML dumps stay untracked
 │   ├── processed/
 │   │   └── documents.csv    # document collection (schema only for now)
 │   └── evaluation/
@@ -96,12 +96,13 @@ FestivalFinder/
 | `source_url` | Canonical URL |
 | `published_date` | Publication or last-updated date when available |
 
-Header-only CSV files are checked in; **no fictional festival rows** are generated. Real documents will be added by the collection pipeline.
+`queries.csv` lists 12 evaluation questions. `judgment_pool.csv` is created by `python -m src.evaluate --make-pool` and starts with a blank relevance column. `documents.csv` is filled locally by `src/collect.py` with wording copied from official pages. Keep that file local unless a festival site permits redistribution. No fictional festival rows are generated.
 
 ### Evaluation — `data/evaluation/`
 
-- **`queries.csv`:** `query_id`, `query_text`, `description`
-- **`relevance_judgments.csv`:** `query_id`, `document_id`, `relevance` (planned: `0` / `1`)
+- **`queries.csv`:** `query_id`, `query_text`, `description` (transportation, lodging, rules, packing, or experiences)
+- **`judgment_pool.csv`:** `query_id`, `query_text`, `document_id`, `festival_name`, `title`, `category`, `source_url`, `relevance` (blank until labeled `0` or `1`)
+- **`relevance_judgments.csv`:** earlier header-only placeholder; the worksheet to fill is `judgment_pool.csv`
 
 Target: at least five evaluation queries with manual judgments and **Precision@5**.
 
@@ -149,16 +150,40 @@ Optional later: WordNet query expansion, document classification, sentiment anal
 
 | Milestone | Status | Goal |
 |-----------|--------|------|
-| **0. Repository setup** | **In progress** | Folders, schemas, stubs, README, dependencies |
-| **1. Collection pipeline** | Next | ~20–30 authentic documents from official guides |
-| **2. Preprocessing** | Planned | Cleaning, tokenization, stopwords |
-| **3. Indexing** | Planned | TF-IDF matrix and term→document lookup |
-| **4. Search / ranking** | Planned | TF-IDF cosine + BM25; top-k with source links |
-| **5. Evaluation** | Planned | ≥5 queries, judgments, Precision@5 |
+| **0. Repository setup** | Complete | Folders, schemas, stubs, README, dependencies |
+| **1. Collection pipeline** | Complete | 257 documents from five official festival guides |
+| **2. Preprocessing and TF-IDF** | Complete | Baseline TF-IDF plus a title-aware, festival-filtered ranker |
+| **3. Indexing** | Complete for TF-IDF and BM25 | Same 246-document working collection |
+| **4. Search / ranking** | **In review** | Interactive baseline TF-IDF, improved TF-IDF, and BM25 |
+| **5. Evaluation** | **In review** | 12 queries and a blank judgment pool. Metrics wait for labels |
 | **6. Streamlit UI** | Planned | Local query interface |
 | **7. Presentation** | Planned | 15-minute demo of architecture, code, search, evaluation |
 
-**Current step:** Milestone 0 only. Collection, ranking, and Streamlit are **not** implemented yet.
+**Current step:** Milestone 3 BM25 and the evaluation worksheet are ready for review. Relevance labels are still blank, so Precision@5, Precision@10, and MAP are not reported. Streamlit is not implemented.
+
+### Search from PowerShell
+
+Run these commands from the FestivalFinder project folder.
+
+```powershell
+python -m src.search
+python -m src.search --mode baseline
+python -m src.search --mode improved
+python -m src.search --mode bm25
+python -m src.search --demo
+python -m src.search --mode baseline --demo
+python -m src.search --mode bm25 --demo
+python -m src.search --mode bm25 --no-festival-filter
+python -m src.evaluate --make-pool
+```
+
+`python -m src.search` opens the interactive improved TF-IDF ranker. Type a question, read the top five results, and type `exit` to quit. `--mode baseline` is the original body-only TF-IDF index. `--mode bm25` is BM25 with the same stemming, title weight, and festival filter as the improved TF-IDF ranker. `--demo` runs the five original sample queries in the selected mode and exits. `--no-festival-filter` searches every festival even when the question names one.
+
+`python -m src.evaluate --make-pool` writes `data/evaluation/judgment_pool.csv`. Each row is one query and one document from the union of the three rankers' top 10 lists. The `relevance` column is blank. Enter `1` when the document answers the question and `0` when it does not. The command will not replace the file after any label has been entered. `python -m src.evaluate` reports Precision@5, Precision@10, and MAP only after every cell is filled.
+
+### What the metrics mean
+
+Precision@5 is the fraction of the first five results that you marked relevant. Precision@10 uses the first ten. The denominator stays 5 or 10 when the ranker returns fewer documents. Mean average precision walks down the judged list and averages precision at each relevant document, then averages that value across queries. Documents that never entered the judgment pool are left out of MAP. They are not marked irrelevant.
 
 ---
 

@@ -1,1 +1,13 @@
 query_id,query_text,description
+q01,What are the best transportation options for Coachella?,transportation
+q02,What can I bring into Lollapalooza?,rules
+q03,How does camping work at Bonnaroo?,lodging
+q04,What should I pack for EDC Las Vegas?,packing
+q05,What is the bag policy at Outside Lands?,rules
+q06,Where can I park at Coachella?,transportation
+q07,What lodging options does Bonnaroo offer besides basic car camping?,lodging
+q08,What items are prohibited at Lollapalooza?,rules
+q09,What should I pack for the weather at Bonnaroo?,packing
+q10,What food is available at Outside Lands?,experiences
+q11,How do the shuttles work at EDC Las Vegas?,transportation
+q12,Can I camp at Outside Lands?,lodging

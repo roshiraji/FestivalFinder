@@ -1,0 +1,25 @@
+# FestivalFinder — CAP 6776 Information Retrieval
+# Python 3.11+ recommended
+
+# Data handling
+pandas>=2.1.0
+
+# Web collection (official festival pages only)
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Text preprocessing
+nltk>=3.8.1
+
+# Retrieval: TF-IDF + cosine similarity
+scikit-learn>=1.3.0
+
+# Retrieval: BM25 ranking
+rank-bm25>=0.2.2
+
+# Lightweight search UI (implemented in a later milestone)
+streamlit>=1.28.0
+
+# Testing
+pytest>=7.4.0

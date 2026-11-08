@@ -24,7 +24,7 @@ Documents come from official festival websites and FAQ guides. The system does n
 
 ## Current progress
 
-Collection, preprocessing, TF-IDF, BM25, and the evaluation worksheet are implemented. Manual relevance labels are still blank, so Precision@5, Precision@10, and MAP have not been scored. The Streamlit interface is not built yet.
+Collection, preprocessing, TF-IDF, BM25, and evaluation are implemented. Manual relevance labels are complete for all 166 judgment-pool rows (56 relevant, 110 not relevant). Precision@5, Precision@10, and MAP have been scored. The Streamlit interface is not built yet.
 
 | Piece | State |
 |-------|--------|
@@ -34,8 +34,8 @@ Collection, preprocessing, TF-IDF, BM25, and the evaluation worksheet are implem
 | Improved TF-IDF | Porter stemming, title weight 2, and festival filtering |
 | BM25 | Same tokens, title weight, and festival filter as the improved TF-IDF ranker |
 | Search | Interactive command line with `--mode baseline`, `--mode improved`, and `--mode bm25` |
-| Evaluation setup | 12 queries and a 166-row judgment pool with a blank `relevance` column |
-| Metrics code | Precision@5, Precision@10, and condensed-list MAP. Scores print only after every label is filled |
+| Evaluation | 12 queries; 166-row judgment pool fully labeled (`1` / `0`) |
+| Metrics | Precision@5, Precision@10, and condensed-list MAP reported below |
 | Streamlit | Not started |
 
 ---
@@ -130,8 +130,8 @@ Indexing uses 246 of these rows. Eleven Bonnaroo lodging passes were near-duplic
 ### Evaluation — `data/evaluation/`
 
 - **`queries.csv`:** `query_id`, `query_text`, `description` (transportation, lodging, rules, packing, or experiences). Includes the five original demo queries plus seven more.
-- **`judgment_pool.csv`:** `query_id`, `query_text`, `document_id`, `festival_name`, `title`, `category`, `source_url`, `relevance`. One row per query and document in the union of each ranker's top 10. `relevance` is blank until labeled `1` (answers the question) or `0` (does not).
-- **`relevance_judgments.csv`:** earlier header-only placeholder. The worksheet to fill is `judgment_pool.csv`.
+- **`judgment_pool.csv`:** `query_id`, `query_text`, `document_id`, `festival_name`, `title`, `category`, `source_url`, `relevance`. One row per query and document in the union of each ranker's top 10. All 166 `relevance` cells are filled with `1` (answers the question) or `0` (does not): 56 relevant, 110 not relevant.
+- **`relevance_judgments.csv`:** earlier header-only placeholder. The labeled worksheet is `judgment_pool.csv`.
 
 ---
 
@@ -164,13 +164,25 @@ python -m src.evaluate
 | `--title-weight` | How many times each non-festival title term is counted. Default: 2 |
 | `--k1`, `--b` | BM25 term-frequency saturation and length penalty. Defaults: 1.5 and 0.75 |
 
-`python -m src.evaluate --make-pool` rewrites `judgment_pool.csv` only while every `relevance` cell is still blank. After any label is entered, that command refuses to overwrite the file. `python -m src.evaluate` reports per-query and average Precision@5, Precision@10, and MAP only after every cell is `0` or `1`.
+`python -m src.evaluate --make-pool` refuses to overwrite `judgment_pool.csv` now that labels exist. `python -m src.evaluate` prints the scored metrics below.
+
+### Evaluation results
+
+Scores use the completed manual judgments. Unjudged documents outside the pool are excluded from MAP; they are not labeled 0.
+
+| Method | Mean P@5 | Mean P@10 | MAP |
+|--------|----------|-----------|-----|
+| Baseline TF-IDF | 0.2500 | 0.2167 | 0.3255 |
+| Improved TF-IDF | **0.5000** | **0.3917** | **0.8719** |
+| BM25 | 0.4833 | 0.3917 | 0.8418 |
+
+Improved TF-IDF is the strongest overall. BM25 is close on Precision@10 and MAP. Baseline TF-IDF is substantially weaker, especially on packing and bag-policy queries.
 
 ### What the metrics mean
 
-Precision@5 is the fraction of the first five results marked relevant. Precision@10 uses the first ten. The denominator stays 5 or 10 when the ranker returns fewer documents, because those missing positions are not retrieved documents. A retrieved document with a blank label is different: that metric is skipped rather than treating the blank as irrelevant.
+Precision@5 is the fraction of the first five results marked relevant. Precision@10 uses the first ten. The denominator stays 5 or 10 when the ranker returns fewer documents, because those missing positions are not retrieved documents.
 
-Mean average precision averages, for each query, the precision at each relevant document's rank, then averages those query scores. Documents that never entered the judgment pool are left out of that ranked list. They are not marked irrelevant. This is condensed-list MAP, and it can be higher than a MAP that counted unjudged documents as not relevant.
+Mean average precision averages, for each query, the precision at each relevant document's rank, then averages those query scores. Documents that never entered the judgment pool are left out of that ranked list. They are not marked irrelevant. This is condensed-list MAP.
 
 ---
 
@@ -204,8 +216,8 @@ python -m pytest
 4. Query processing shared with the document text
 5. Cosine similarity
 6. BM25 document ranking
-7. Pooled relevance judgments (labels still to be entered)
-8. Precision@5, Precision@10, and MAP (implemented; not yet scored)
+7. Pooled relevance judgments (166 labeled rows)
+8. Precision@5, Precision@10, and MAP (scored)
 
 Possible later work: WordNet query expansion for wording mismatches such as "bring" versus "allowed" and "prohibited." Document classification and sentiment analysis are not part of the current system.
 
@@ -218,8 +230,8 @@ Possible later work: WordNet query expansion for wording mismatches such as "bri
 | **0. Repository setup** | Complete | Folders, schemas, stubs, README, dependencies |
 | **1. Collection pipeline** | Complete | 257 documents from five official festival guides |
 | **2. TF-IDF** | Complete | Baseline body-only TF-IDF, then title weighting, stemming, and festival filtering |
-| **3. BM25 and evaluation setup** | Complete through the blank judgment pool | BM25 search mode, 12 queries, 166-row pool, metric functions |
-| **4. Manual judgments and scored evaluation** | Next | Fill `relevance`, then report Precision@5, Precision@10, and MAP |
+| **3. BM25 and evaluation setup** | Complete | BM25 search mode, 12 queries, judgment pool, metric functions |
+| **4. Manual judgments and scored evaluation** | Complete | All 166 labels filled; Precision@5, Precision@10, and MAP reported |
 | **5. Streamlit UI** | Planned | Local query interface |
 | **6. Presentation** | Planned | 15-minute demo of architecture, code, search, and evaluation |
 
@@ -229,8 +241,8 @@ Possible later work: WordNet query expansion for wording mismatches such as "bri
 
 - [x] Functioning retrieval system (command line; three rankers)
 - [x] At least five evaluation queries
-- [ ] Manual relevance judgments
-- [ ] Reported Precision@5 (code is ready; labels are not)
+- [x] Manual relevance judgments
+- [x] Reported Precision@5 (plus Precision@10 and MAP)
 - [ ] 15-minute recorded presentation
 
 ---

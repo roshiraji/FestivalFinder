@@ -243,7 +243,7 @@ Possible later work: WordNet query expansion for wording mismatches such as "bri
 - [x] At least five evaluation queries
 - [x] Manual relevance judgments
 - [x] Reported Precision@5 (plus Precision@10 and MAP)
-- [ ] 15-minute recorded presentation
+- [x] 15-minute recorded presentation: https://www.youtube.com/watch?v=A-wfQHNlg64
 
 ---
 
